@@ -69,3 +69,7 @@ func (s *Stream) Close() {
 	close(s.events)
 	s.closed = true
 }
+
+func (s *Stream) Closed() bool {
+	return s.closed
+}
