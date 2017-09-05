@@ -22,6 +22,9 @@ func (s *Stream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for !s.closed {
 		select {
 		case event := <-s.events:
+			if event.Comment == "" && event.Message == "" {
+				event.Message = "message"
+			}
 			event.Encode(w)
 			flusher.Flush()
 		case <-closeNotifier.CloseNotify():
@@ -32,6 +35,16 @@ func (s *Stream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Stream) Send(event Event) {
 	s.events <- event
+}
+
+func (s *Stream) Comment(comment string) {
+	s.Send(Event{
+		Comment: comment,
+	})
+}
+
+func (s *Stream) Ping() {
+	s.Comment("ping")
 }
 
 func (s *Stream) Close() {
