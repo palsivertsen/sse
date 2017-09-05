@@ -47,6 +47,10 @@ func (s *Stream) Ping() {
 	s.Comment("ping")
 }
 
+func (s *Stream) Retry(retry int) {
+	s.Send(Event{Retry: &retry})
+}
+
 func (s *Stream) Close() {
 	close(s.events)
 	s.closed = true

@@ -10,6 +10,7 @@ type Event struct {
 	Message string
 	Type    string
 	Comment string
+	Retry   *int
 }
 
 func (e *Event) Encode(w io.Writer) {
@@ -44,6 +45,9 @@ func (e *Event) Encode(w io.Writer) {
 				fmt.Fprint(w, ": ")
 			}
 		}
+	}
+	if e.Retry != nil {
+		fmt.Fprintf(w, "retry: %d", e.Retry)
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintln(w)
