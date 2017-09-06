@@ -15,12 +15,17 @@ func main() {
 		stream := sse.NewStream()
 		defer stream.Close()
 		go func() {
-			for !stream.Closed() {
-				log.Print("Sending sse message")
-				stream.Send(sse.Event{
-					Message: "The time is: " + time.Now().String(),
-				})
-				time.Sleep(time.Second)
+			for {
+				select {
+				case <-stream.CloseNotify():
+					return
+				default:
+					log.Print("Sending sse message")
+					stream.Send(sse.Event{
+						Message: "The time is: " + time.Now().String(),
+					})
+					time.Sleep(time.Second)
+				}
 			}
 		}()
 		stream.ServeHTTP(w, req)

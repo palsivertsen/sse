@@ -5,13 +5,14 @@ import (
 )
 
 type Stream struct {
-	events chan Event
-	closed bool
+	events        chan Event
+	closeNotifier chan bool
 }
 
 func NewStream() *Stream {
 	return &Stream{
-		events: make(chan Event),
+		events:        make(chan Event),
+		closeNotifier: make(chan bool, 1),
 	}
 }
 
@@ -19,7 +20,7 @@ func (s *Stream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	flusher := w.(http.Flusher)
 	closeNotifier := w.(http.CloseNotifier)
 	w.Header().Set("Content-Type", "text/event-stream")
-	for !s.closed {
+	for {
 		select {
 		case event := <-s.events:
 			if event.Comment == "" && event.Message == "" {
@@ -28,7 +29,8 @@ func (s *Stream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			event.Encode(w)
 			flusher.Flush()
 		case <-closeNotifier.CloseNotify():
-			s.closed = true
+			s.closeNotifier <- true
+			return
 		}
 	}
 }
@@ -53,9 +55,9 @@ func (s *Stream) Retry(retry int) {
 
 func (s *Stream) Close() {
 	close(s.events)
-	s.closed = true
+	close(s.closeNotifier)
 }
 
-func (s *Stream) Closed() bool {
-	return s.closed
+func (s *Stream) CloseNotify() <-chan bool {
+	return s.closeNotifier
 }
