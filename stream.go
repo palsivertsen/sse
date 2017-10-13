@@ -23,8 +23,8 @@ func (s *Stream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case event := <-s.events:
-			if event.Comment == "" && event.Message == "" {
-				event.Message = "message"
+			if event.Comment == "" && event.Type == "" {
+				event.Type = "message"
 			}
 			event.Encode(w)
 			flusher.Flush()
