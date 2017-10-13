@@ -20,6 +20,8 @@ func (s *Stream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	flusher := w.(http.Flusher)
 	closeNotifier := w.(http.CloseNotifier)
 	w.Header().Set("Content-Type", "text/event-stream")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
 	for {
 		select {
 		case event := <-s.events:

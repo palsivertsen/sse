@@ -43,13 +43,33 @@ func TestStream(t *testing.T) {
 			ResponseRecorder: httptest.NewRecorder(),
 			closer:           make(chan bool),
 		}
+		defer close(recorder.closer)
 		go func() {
 			time.Sleep(time.Second * 2) // Wait for data
 			recorder.closer <- true
 		}()
 		stream.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
 
-		assert.Equal(t, "text/event-stream", recorder.Header().Get("content-type"))
+		assert.Equal(t, "text/event-stream", recorder.Result().Header.Get("content-type"))
 		assert.Equal(t, event.raw, recorder.Body.String())
 	}
+}
+
+func TestStream_Flushed(t *testing.T) {
+	stream := NewStream()
+	defer stream.Close()
+	recorder := ResponseRecorderWrapper{
+		ResponseRecorder: httptest.NewRecorder(),
+		closer:           make(chan bool),
+	}
+	defer close(recorder.closer)
+	go func() {
+		time.Sleep(time.Millisecond * 500) // Wait for data
+		recorder.closer <- true
+	}()
+	stream.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	assert.True(t, recorder.Flushed, "Stream should be flushed on initial connection")
+	assert.Equal(t, "text/event-stream", recorder.Result().Header.Get("content-type"))
+	assert.Equal(t, http.StatusOK, recorder.Result().StatusCode)
 }
