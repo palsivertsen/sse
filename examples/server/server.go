@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 	"time"
@@ -8,9 +9,11 @@ import (
 	"github.com/palsivertsen/sse"
 )
 
-var addr = ":8080"
-
 func main() {
+	var (
+		addr = flag.String("addr", ":8080", "Server listen address")
+	)
+	flag.Parse()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", serveScript)
 	mux.HandleFunc("/stream", func(w http.ResponseWriter, req *http.Request) {
@@ -34,8 +37,8 @@ func main() {
 		}()
 		stream.ServeHTTP(w, req)
 	})
-	log.Printf("A live demo is shortly available at %s", addr)
-	http.ListenAndServe(addr, mux)
+	log.Printf("A live demo is shortly available at %s", *addr)
+	log.Fatal(http.ListenAndServe(*addr, mux))
 }
 
 func serveScript(w http.ResponseWriter, r *http.Request) {
