@@ -28,10 +28,10 @@ func TestStream(t *testing.T) {
 				Type:    "test",
 				Message: "this message\nhas two lines",
 			},
-			raw: "event: test\ndata: this message\ndata: has two lines\n\n",
+			raw: "event:test\ndata:this message\ndata:has two lines\n\n",
 		}, {
 			obj: Event{Message: "No type defaults to 'message'"},
-			raw: "event: message\ndata: No type defaults to 'message'\n\n",
+			raw: "event:message\ndata:No type defaults to 'message'\n\n",
 		},
 	}
 	for _, event := range events {
@@ -72,4 +72,22 @@ func TestStream_Flushed(t *testing.T) {
 	assert.True(t, recorder.Flushed, "Stream should be flushed on initial connection")
 	assert.Equal(t, "text/event-stream", recorder.Result().Header.Get("content-type"))
 	assert.Equal(t, http.StatusOK, recorder.Result().StatusCode)
+}
+
+func TestStream_Ping(t *testing.T) {
+	stream := NewStream()
+	defer stream.Close()
+	recorder := ResponseRecorderWrapper{
+		ResponseRecorder: httptest.NewRecorder(),
+		closer:           make(chan bool),
+	}
+	defer close(recorder.closer)
+	go func() {
+		stream.Ping()
+		time.Sleep(time.Millisecond * 500) // Wait for data
+		recorder.closer <- true
+	}()
+	stream.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	assert.Equal(t, ":ping\n\n", recorder.Body.String())
 }

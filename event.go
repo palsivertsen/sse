@@ -14,41 +14,77 @@ type Event struct {
 }
 
 func (e *Event) Encode(w io.Writer) {
+	wrapper := &eventWriter{writer: w}
+	defer wrapper.end()
+
 	if e.Type != "" {
-		fmt.Fprint(w, "event: ")
-		fmt.Fprintln(w, e.Type)
+		wrapper.writeType(e.Type)
 	}
 	if e.Message != "" {
-		fmt.Fprint(w, "data: ")
-		data := bytes.NewBuffer([]byte(e.Message))
-		for {
-			b, err := data.ReadByte()
-			if err != nil {
-				break
-			}
-			w.Write([]byte{b})
-			if b == '\n' {
-				fmt.Fprint(w, "data: ")
-			}
-		}
+		wrapper.writeMessage(e.Message)
 	}
 	if e.Comment != "" {
-		fmt.Fprint(w, ":")
-		comment := bytes.NewBuffer([]byte(e.Message))
-		for {
-			b, err := comment.ReadByte()
-			if err != nil {
-				break
-			}
-			w.Write([]byte{b})
-			if b == '\n' {
-				fmt.Fprint(w, ": ")
-			}
-		}
+		wrapper.writeComment(e.Comment)
 	}
 	if e.Retry != nil {
-		fmt.Fprintf(w, "retry: %d", e.Retry)
+		wrapper.writeRetry(*e.Retry)
 	}
-	fmt.Fprintln(w)
-	fmt.Fprintln(w)
+}
+
+type eventWriter struct {
+	writer  io.Writer
+	written bool
+}
+
+func (e *eventWriter) Write(buf []byte) (n int, err error) {
+	if !e.written {
+		e.written = true
+	}
+	return e.writer.Write(buf)
+}
+
+func (e *eventWriter) end() {
+	if e.written {
+		fmt.Fprintln(e.writer)
+	}
+}
+
+func (e *eventWriter) writeType(t string) {
+	fmt.Fprintf(e, "event:%s\n", t)
+}
+
+func (e *eventWriter) writeMessage(message string) {
+	fmt.Fprint(e, "data:")
+	data := bytes.NewBuffer([]byte(message))
+	for {
+		b, err := data.ReadByte()
+		if err != nil {
+			break
+		}
+		e.Write([]byte{b})
+		if b == '\n' {
+			fmt.Fprint(e, "data:")
+		}
+	}
+	fmt.Fprintln(e)
+}
+
+func (e *eventWriter) writeComment(c string) {
+	fmt.Fprint(e, ":")
+	comment := bytes.NewBufferString(c)
+	for {
+		b, err := comment.ReadByte()
+		if err != nil {
+			break
+		}
+		e.Write([]byte{b})
+		if b == '\n' {
+			fmt.Fprint(e, ":")
+		}
+	}
+	fmt.Fprintln(e)
+}
+
+func (e *eventWriter) writeRetry(retry int) {
+	fmt.Fprintf(e, "retry:%d\n", retry)
 }
