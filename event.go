@@ -1,9 +1,12 @@
 package sse
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
+
+	"github.com/palsivertsen/goutils/converters"
 )
 
 type Event struct {
@@ -50,41 +53,28 @@ func (e *eventWriter) end() {
 }
 
 func (e *eventWriter) writeType(t string) {
-	fmt.Fprintf(e, "event:%s\n", t)
+	e.lineWithTag("event", t)
 }
 
 func (e *eventWriter) writeMessage(message string) {
-	fmt.Fprint(e, "data:")
-	data := bytes.NewBuffer([]byte(message))
-	for {
-		b, err := data.ReadByte()
-		if err != nil {
-			break
-		}
-		e.Write([]byte{b})
-		if b == '\n' {
-			fmt.Fprint(e, "data:")
-		}
-	}
-	fmt.Fprintln(e)
+	e.linesWithTag("data", bytes.NewBufferString(message))
 }
 
 func (e *eventWriter) writeComment(c string) {
-	fmt.Fprint(e, ":")
-	comment := bytes.NewBufferString(c)
-	for {
-		b, err := comment.ReadByte()
-		if err != nil {
-			break
-		}
-		e.Write([]byte{b})
-		if b == '\n' {
-			fmt.Fprint(e, ":")
-		}
-	}
-	fmt.Fprintln(e)
+	e.linesWithTag("", bytes.NewBufferString(c))
 }
 
 func (e *eventWriter) writeRetry(retry int) {
-	fmt.Fprintf(e, "retry:%d\n", retry)
+	e.lineWithTag("retry", converters.Int(retry).ToString())
+}
+
+func (e *eventWriter) linesWithTag(tag string, r io.Reader) {
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		e.lineWithTag(tag, scanner.Text())
+	}
+}
+
+func (e *eventWriter) lineWithTag(tag string, line string) {
+	fmt.Fprintf(e, "%s:%s\n", tag, line)
 }

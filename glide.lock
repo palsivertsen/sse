@@ -1,6 +1,10 @@
 hash: c76b48cb9d87ea66ab2a39c861b39f39505b5aa3dfeaaedb826d8fc0607a821b
-updated: 2017-10-17T16:47:35.608144493+02:00
-imports: []
+updated: 2017-10-17T16:48:00.830090996+02:00
+imports:
+- name: github.com/palsivertsen/goutils
+  version: 34cca202ed5562ef6cb8ba5e68ca6770ac368aa0
+  subpackages:
+  - converters
 testImports:
 - name: github.com/davecgh/go-spew
   version: 04cdfd42973bb9c8589fd6a731800cf222fde1a9
