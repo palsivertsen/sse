@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type ResponseRecorderWrapper struct {
@@ -36,19 +37,16 @@ func TestStream(t *testing.T) {
 	}
 	for _, event := range events {
 		stream := NewStream()
-		defer stream.Close()
-		go stream.Send(event.obj)
-
 		recorder := ResponseRecorderWrapper{
 			ResponseRecorder: httptest.NewRecorder(),
 			closer:           make(chan bool),
 		}
-		defer close(recorder.closer)
+		go stream.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
 		go func() {
 			time.Sleep(time.Second * 2) // Wait for data
 			recorder.closer <- true
 		}()
-		stream.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+		stream.Send(event.obj)
 
 		assert.Equal(t, "text/event-stream", recorder.Result().Header.Get("content-type"))
 		assert.Equal(t, event.raw, recorder.Body.String())
@@ -57,12 +55,10 @@ func TestStream(t *testing.T) {
 
 func TestStream_Flushed(t *testing.T) {
 	stream := NewStream()
-	defer stream.Close()
 	recorder := ResponseRecorderWrapper{
 		ResponseRecorder: httptest.NewRecorder(),
 		closer:           make(chan bool),
 	}
-	defer close(recorder.closer)
 	go func() {
 		time.Sleep(time.Millisecond * 500) // Wait for data
 		recorder.closer <- true
@@ -76,12 +72,10 @@ func TestStream_Flushed(t *testing.T) {
 
 func TestStream_Ping(t *testing.T) {
 	stream := NewStream()
-	defer stream.Close()
 	recorder := ResponseRecorderWrapper{
 		ResponseRecorder: httptest.NewRecorder(),
 		closer:           make(chan bool),
 	}
-	defer close(recorder.closer)
 	go func() {
 		stream.Ping()
 		time.Sleep(time.Millisecond * 500) // Wait for data
@@ -90,4 +84,27 @@ func TestStream_Ping(t *testing.T) {
 	stream.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	assert.Equal(t, ":ping\n\n", recorder.Body.String())
+}
+
+func TestStream_Close(t *testing.T) {
+	recorder := ResponseRecorderWrapper{
+		ResponseRecorder: httptest.NewRecorder(),
+		closer:           make(chan bool),
+	}
+	unit := NewStream()
+	responseNotifier := make(chan struct{})
+	go func() {
+		unit.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+		responseNotifier <- struct{}{}
+	}()
+
+	unit.Ping()
+	unit.Close()
+	go require.NotPanics(t, unit.Ping, "Should not panic after close")
+
+	select {
+	case <-time.NewTimer(time.Second * 10).C:
+		t.Fatal("Stream did not close connection")
+	case <-responseNotifier:
+	}
 }
