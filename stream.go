@@ -26,6 +26,7 @@ func NewStream() *Stream {
 
 // ServeHTTP sets up a stream (SSE) connection to the client
 // Panics if called more than once
+// Panics if http.ReposneWriter doesn't implement http.Flusher and http.CloseNotifier
 // Stream is to be considered closed on return
 func (s *Stream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Ensure only one call
@@ -84,7 +85,7 @@ func (s *Stream) Retry(milliseconds int) {
 }
 
 // Close the connection to the client
-// All functions becomes no-op
+// All functions becomes no-ops
 func (s *Stream) Close() {
 	select {
 	case <-s.closeNotifier:
