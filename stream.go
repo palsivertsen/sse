@@ -2,14 +2,17 @@ package sse
 
 import (
 	"net/http"
+	"sync"
 )
 
 // Stream is a HTTP handler for SSE
 // Use NewStream to creat new instance
 type Stream struct {
-	events        chan Event
-	closeNotifier chan struct{}
-	stop          chan struct{}
+	events          chan Event
+	closeNotifier   chan struct{}
+	stop            chan struct{}
+	serveHTTPMux    sync.Mutex
+	serveHTTPCalled bool
 }
 
 // NewStream initializes a stream handler
@@ -21,7 +24,18 @@ func NewStream() *Stream {
 	}
 }
 
+// ServeHTTP sets up a stream (SSE) connection to the client
+// Panics if called more than once
+// Stream is to be considered closed on return
 func (s *Stream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Ensure only one call
+	s.serveHTTPMux.Lock()
+	if s.serveHTTPCalled {
+		s.serveHTTPMux.Unlock()
+		panic("ServeHTTP call only allowed once per Stream")
+	}
+	s.serveHTTPCalled = true
+	s.serveHTTPMux.Unlock()
 	flusher := w.(http.Flusher)
 	clientCloseNotifier := w.(http.CloseNotifier)
 	w.Header().Set("Content-Type", "text/event-stream")

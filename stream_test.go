@@ -129,3 +129,17 @@ func TestStream_MultiClose(t *testing.T) {
 	require.NotPanics(t, unit.Close)
 	require.NotPanics(t, unit.Close)
 }
+
+func TestStream_MultiServeHTTP(t *testing.T) {
+	recorder := ResponseRecorderWrapper{
+		ResponseRecorder: httptest.NewRecorder(),
+		closer:           make(chan bool),
+	}
+	unit := NewStream()
+
+	go require.NotPanics(t, func() { unit.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil)) })
+	time.Sleep(time.Second) // Give go routine time to start
+	require.Panics(t, func() { unit.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil)) },
+		"Second call to ServeHTTP should panic!")
+	require.NotPanics(t, unit.Close)
+}
