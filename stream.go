@@ -2,31 +2,47 @@ package sse
 
 import (
 	"net/http"
+	"sync"
 )
 
 // Stream is a HTTP handler for SSE
 // Use NewStream to creat new instance
 type Stream struct {
-	events        chan Event
-	closeNotifier chan bool
-	close         chan struct{}
+	events          chan Event
+	closeNotifier   chan struct{}
+	stop            chan struct{}
+	serveHTTPMux    sync.Mutex
+	serveHTTPCalled bool
 }
 
 // NewStream initializes a stream handler
 func NewStream() *Stream {
 	return &Stream{
 		events:        make(chan Event),
-		closeNotifier: make(chan bool, 1),
-		close:         make(chan struct{}),
+		closeNotifier: make(chan struct{}),
+		stop:          make(chan struct{}),
 	}
 }
 
+// ServeHTTP sets up a stream (SSE) connection to the client
+// Panics if called more than once
+// Panics if http.ReposneWriter doesn't implement http.Flusher and http.CloseNotifier
+// Stream is to be considered closed on return
 func (s *Stream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Ensure only one call
+	s.serveHTTPMux.Lock()
+	if s.serveHTTPCalled {
+		s.serveHTTPMux.Unlock()
+		panic("ServeHTTP call only allowed once per Stream")
+	}
+	s.serveHTTPCalled = true
+	s.serveHTTPMux.Unlock()
 	flusher := w.(http.Flusher)
-	closeNotifier := w.(http.CloseNotifier)
+	clientCloseNotifier := w.(http.CloseNotifier)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
+	defer close(s.stop)
 	for {
 		select {
 		case event := <-s.events:
@@ -35,10 +51,9 @@ func (s *Stream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			event.Encode(w)
 			flusher.Flush()
-		case <-closeNotifier.CloseNotify():
-			s.closeNotifier <- true
+		case <-clientCloseNotifier.CloseNotify():
 			return
-		case <-s.close:
+		case <-s.closeNotifier:
 			return
 		}
 	}
@@ -46,7 +61,10 @@ func (s *Stream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Send an event to the stream
 func (s *Stream) Send(event Event) {
-	s.events <- event
+	select {
+	case <-s.stop:
+	case s.events <- event:
+	}
 }
 
 // Comment sends a comment to the stream
@@ -62,19 +80,21 @@ func (s *Stream) Ping() {
 }
 
 // Retry tells the client how long in milliseconds to wait before trying to reconnect
-func (s *Stream) Retry(retry int) {
-	s.Send(Event{Retry: &retry})
+func (s *Stream) Retry(milliseconds int) {
+	s.Send(Event{Retry: &milliseconds})
 }
 
 // Close the connection to the client
-// Avoid using the stream after it's closed
+// All functions becomes no-ops
 func (s *Stream) Close() {
-	s.close <- struct{}{}
-	close(s.closeNotifier)
+	select {
+	case <-s.closeNotifier:
+	default:
+		close(s.closeNotifier)
+	}
 }
 
-// CloseNotify notifies if the connection to client was closed
-// Avoid using the stream after client connection was closed
-func (s *Stream) CloseNotify() <-chan bool {
+// CloseNotify returns a channel that will be closed when the stream is closed
+func (s *Stream) CloseNotify() <-chan struct{} {
 	return s.closeNotifier
 }

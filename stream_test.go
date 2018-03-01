@@ -108,3 +108,38 @@ func TestStream_Close(t *testing.T) {
 	case <-responseNotifier:
 	}
 }
+
+func TestStream_SendCloseDeadlock(t *testing.T) {
+	recorder := ResponseRecorderWrapper{
+		ResponseRecorder: httptest.NewRecorder(),
+		closer:           make(chan bool),
+	}
+	unit := NewStream()
+	go unit.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	unit.Ping()
+	unit.Close()
+	unit.Ping()
+	unit.Ping()
+	unit.Ping()
+}
+
+func TestStream_MultiClose(t *testing.T) {
+	unit := NewStream()
+	require.NotPanics(t, unit.Close)
+	require.NotPanics(t, unit.Close)
+}
+
+func TestStream_MultiServeHTTP(t *testing.T) {
+	recorder := ResponseRecorderWrapper{
+		ResponseRecorder: httptest.NewRecorder(),
+		closer:           make(chan bool),
+	}
+	unit := NewStream()
+
+	go require.NotPanics(t, func() { unit.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil)) })
+	time.Sleep(time.Second) // Give go routine time to start
+	require.Panics(t, func() { unit.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil)) },
+		"Second call to ServeHTTP should panic!")
+	require.NotPanics(t, unit.Close)
+}
