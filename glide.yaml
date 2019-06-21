@@ -1,4 +1,0 @@
-package: github.com/palsivertsen/sse
-import: []
-testImport:
-- package: github.com/stretchr/testify
