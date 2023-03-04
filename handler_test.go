@@ -3,6 +3,7 @@ package sse_test
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 
@@ -71,6 +72,43 @@ func TestMarshalEvent(t *testing.T) {
 			err := sse.MarshalEvent(&buf, tt.event)
 			require.NoError(t, err)
 			assert.Equal(t, tt.out, buf.String())
+		})
+	}
+}
+
+func TestMarshalEvent_FieldFormatErrors(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		event *sse.Event
+		field string
+		err   error
+	}{
+		{
+			event: &sse.Event{
+				Name: "multi\nline",
+			},
+			field: "event",
+			err:   sse.ErrMultilineContent,
+		},
+		{
+			event: &sse.Event{
+				ID: "multi\nline",
+			},
+			field: "id",
+			err:   sse.ErrMultilineContent,
+		},
+	}
+	for testNum, tt := range tests {
+		tt := tt
+		t.Run(fmt.Sprintf("%d", testNum), func(t *testing.T) {
+			t.Parallel()
+			t.Logf("input:\n%s", spew.Sdump(tt))
+
+			err := sse.MarshalEvent(io.Discard, tt.event)
+			var fce sse.FieldContentError
+			require.ErrorAs(t, err, &fce)
+			assert.Equal(t, tt.field, fce.FieldName)
+			assert.ErrorIs(t, err, tt.err)
 		})
 	}
 }

@@ -2,6 +2,7 @@ package sse
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -14,21 +15,42 @@ type Event struct {
 	Retry uint
 }
 
+type FieldContentError struct {
+	FieldName string
+
+	err error
+}
+
+func (e FieldContentError) Error() string {
+	return fmt.Sprintf("field %q: %s", e.FieldName, e.err)
+}
+
+func (e FieldContentError) Unwrap() error { return e.err }
+
 func MarshalEvent(w io.Writer, e *Event) error {
 	if e.Retry != 0 {
-		fmt.Fprintf(w, "retry:%d\n", e.Retry) // TODO handle error
+		_, err := fmt.Fprintf(w, "retry:%d\n", e.Retry)
+		if err != nil {
+			return fmt.Errorf("write: %w", err)
+		}
 	}
 	if e.Name != "" {
-		writeField(w, "event", strings.NewReader(e.Name)) // TODO handle error
+		if err := writeField(w, "event", strings.NewReader(e.Name)); err != nil {
+			return err
+		}
 	}
 	if e.ID != "" {
-		writeField(w, "id", strings.NewReader(e.ID)) // TODO handle error
+		if err := writeField(w, "id", strings.NewReader(e.ID)); err != nil {
+			return err
+		}
 	}
 	if e.Data != nil {
 		scanner := bufio.NewScanner(e.Data)
 		for scanner.Scan() {
 			lineReader := strings.NewReader(scanner.Text())
-			writeField(w, "data", lineReader) // TODO handle error
+			if err := writeField(w, "data", lineReader); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -41,8 +63,47 @@ func MarshalEvent(w io.Writer, e *Event) error {
 }
 
 func writeField(w io.Writer, name string, content io.Reader) error {
-	fmt.Fprintf(w, "%s:", name)
-	io.Copy(w, content)
-	fmt.Fprint(w, "\n")
+	r := blacklistReader{
+		r:     content,
+		runes: []rune{'\n', '\r'},
+	}
+	if _, err := fmt.Fprintf(w, "%s:", name); err != nil {
+		return FieldContentError{
+			FieldName: name,
+			err:       fmt.Errorf("write name: %w", err),
+		}
+	}
+	if _, err := io.Copy(w, &r); err != nil {
+		return FieldContentError{
+			FieldName: name,
+			err:       fmt.Errorf("write content: %w", err),
+		}
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return FieldContentError{
+			FieldName: name,
+			err:       fmt.Errorf("write end of line marker: %w", err),
+		}
+	}
 	return nil
+}
+
+type blacklistReader struct {
+	r     io.Reader
+	runes []rune
+}
+
+func (r *blacklistReader) Read(bytes []byte) (int, error) {
+	i, err := r.r.Read(bytes)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return i, fmt.Errorf("read: %w", err)
+	}
+
+	s := string(bytes[:i])
+	for _, rr := range r.runes {
+		if strings.ContainsRune(s, rr) {
+			return i, ErrMultilineContent
+		}
+	}
+	return i, err
 }
