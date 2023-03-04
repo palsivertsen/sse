@@ -17,7 +17,12 @@ func (f HandlerFunc) ServeSSE(w *ResponseWriter, r *http.Request) {
 }
 
 type ResponseWriter struct {
-	w io.Writer
+	w       io.Writer
+	flusher flusher
+}
+
+type flusher interface {
+	Flush() error
 }
 
 func NewResponseWriter(opts ...func(*ResponseWriter)) *ResponseWriter {
@@ -31,12 +36,16 @@ func NewResponseWriter(opts ...func(*ResponseWriter)) *ResponseWriter {
 func WithHTTPResponseWriter(httpRW http.ResponseWriter) func(*ResponseWriter) {
 	return func(rw *ResponseWriter) {
 		rw.w = httpRW
+		rw.flusher = http.NewResponseController(httpRW)
 	}
 }
 
 func (rw *ResponseWriter) PushEvent(event *Event) error {
 	if err := WriteEvent(rw.w, event); err != nil {
 		return fmt.Errorf("write event: %w", err)
+	}
+	if err := rw.flusher.Flush(); err != nil {
+		return fmt.Errorf("flush event: %w", err)
 	}
 	return nil
 }
