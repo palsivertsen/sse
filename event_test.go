@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMarshalEvent(t *testing.T) {
+func TestWriteEvent(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -69,14 +69,14 @@ func TestMarshalEvent(t *testing.T) {
 			t.Logf("input:\n%s", spew.Sdump(tt))
 
 			var buf bytes.Buffer
-			err := sse.MarshalEvent(&buf, tt.event)
+			err := sse.WriteEvent(&buf, tt.event)
 			require.NoError(t, err)
 			assert.Equal(t, tt.out, buf.String())
 		})
 	}
 }
 
-func TestMarshalEvent_FieldFormatErrors(t *testing.T) {
+func TestWriteEvent_FieldFormatErrors(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		event *sse.Event
@@ -104,7 +104,7 @@ func TestMarshalEvent_FieldFormatErrors(t *testing.T) {
 			t.Parallel()
 			t.Logf("input:\n%s", spew.Sdump(tt))
 
-			err := sse.MarshalEvent(io.Discard, tt.event)
+			err := sse.WriteEvent(io.Discard, tt.event)
 			var fce sse.FieldContentError
 			require.ErrorAs(t, err, &fce)
 			assert.Equal(t, tt.field, fce.FieldName)

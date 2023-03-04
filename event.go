@@ -27,7 +27,7 @@ func (e FieldContentError) Error() string {
 
 func (e FieldContentError) Unwrap() error { return e.err }
 
-func MarshalEvent(w io.Writer, e *Event) error {
+func WriteEvent(w io.Writer, e *Event) error {
 	if e.Retry != 0 {
 		_, err := fmt.Fprintf(w, "retry:%d\n", e.Retry)
 		if err != nil {
