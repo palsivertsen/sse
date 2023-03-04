@@ -7,9 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"sse"
-
 	"github.com/davecgh/go-spew/spew"
+	"github.com/palsivertsen/sse"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

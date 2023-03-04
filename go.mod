@@ -1,4 +1,4 @@
-module sse
+module github.com/palsivertsen/sse
 
 go 1.20
 
