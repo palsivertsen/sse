@@ -52,12 +52,15 @@ func MarshalEvent(w io.Writer, e *Event) error {
 				return err
 			}
 		}
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("scan: %w", err)
+		}
 	}
 
-	// TODO scanner error
-
 	if e.Name != "" || e.Data != nil || e.ID != "" || e.Retry != 0 {
-		fmt.Fprintln(w) // TODO handle error
+		if _, err := fmt.Fprintln(w); err != nil {
+			return fmt.Errorf("write end of event marker: %w", err)
+		}
 	}
 	return nil
 }
