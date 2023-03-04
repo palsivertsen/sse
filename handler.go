@@ -10,6 +10,12 @@ type Handler interface {
 	ServeSSE(*ResponseWriter, *http.Request)
 }
 
+type HandlerFunc func(*ResponseWriter, *http.Request)
+
+func (f HandlerFunc) ServeSSE(w *ResponseWriter, r *http.Request) {
+	f(w, r)
+}
+
 type ResponseWriter struct {
 	w io.Writer
 }
